@@ -1,10 +1,10 @@
-#Parameter grid search with xgboost
-#feature engineering is not so useful and the LB is so overfitted/underfitted
-#so it is good to trust your CV
+# Parameter grid search with xgboost
+# feature engineering is not so useful and the LB is so overfitted/underfitted
+# so it is good to trust your CV
 
-#go xgboost, go mxnet, go DMLC! http://dmlc.ml 
+# go xgboost, go mxnet, go DMLC! http://dmlc.ml
 
-#Credit to Shize's R code and the python re-implementation
+# Credit to Shize's R code and the python re-implementation
 
 import pandas as pd
 import numpy as np
@@ -18,8 +18,7 @@ from sklearn.grid_search import GridSearchCV
 train = pd.read_csv("../input/train.csv")
 test = pd.read_csv("../input/test.csv")
 
-
-train = train.drop('QuoteNumber', axis=1) 
+train = train.drop('QuoteNumber', axis=1)
 test = test.drop('QuoteNumber', axis=1)
 
 # Lets play with some dates
@@ -37,19 +36,18 @@ test['Year'] = test['Date'].apply(lambda x: int(str(x)[:4]))
 test['Month'] = test['Date'].apply(lambda x: int(str(x)[5:7]))
 test['weekday'] = test['Date'].dt.dayofweek
 
-train = train.drop('Date', axis=1)  
+train = train.drop('Date', axis=1)
 test = test.drop('Date', axis=1)
 
-#fill -999 to NAs
+# fill -999 to NAs
 train = train.fillna(-999)
-test = test.fillna(-999) 
+test = test.fillna(-999)
 
-features = list(train.columns[1:])  #la colonne 0 est le quote_conversionflag  
+features = list(train.columns[1:])  # la colonne 0 est le quote_conversionflag
 print(features)
 
-
 for f in train.columns:
-    if train[f].dtype=='object':
+    if train[f].dtype == 'object':
         print(f)
         lbl = preprocessing.LabelEncoder()
         lbl.fit(list(train[f].values) + list(test[f].values))
@@ -58,41 +56,39 @@ for f in train.columns:
 
 xgb_model = xgb.XGBClassifier()
 
-
-#brute force scan for all parameters, here are the tricks
-#usually max_depth is 6,7,8
-#learning rate is around 0.05, but small changes may make big diff
-#tuning min_child_weight subsample colsample_bytree can have 
-#much fun of fighting against overfit 
-#n_estimators is how many round of boosting
-#finally, ensemble xgboost with multiple seeds may reduce variance
-parameters = {'nthread':[4], #when use hyperthread, xgboost may become slower
-              'objective':['binary:logistic'],
-              'learning_rate': [0.05], #so called `eta` value
+# brute force scan for all parameters, here are the tricks
+# usually max_depth is 6,7,8
+# learning rate is around 0.05, but small changes may make big diff
+# tuning min_child_weight subsample colsample_bytree can have
+# much fun of fighting against overfit
+# n_estimators is how many round of boosting
+# finally, ensemble xgboost with multiple seeds may reduce variance
+parameters = {'nthread': [4],  # when use hyperthread, xgboost may become slower
+              'objective': ['binary:logistic'],
+              'learning_rate': [0.05],  # so called `eta` value
               'max_depth': [6],
               'min_child_weight': [11],
               'silent': [1],
               'subsample': [0.8],
               'colsample_bytree': [0.7],
-              'n_estimators': [5], #number of trees, change it to 1000 for better results
-              'missing':[-999],
+              'n_estimators': [5],  # number of trees, change it to 1000 for better results
+              'missing': [-999],
               'seed': [1337]}
 
-
-clf = GridSearchCV(xgb_model, parameters, n_jobs=5, 
-                   cv=StratifiedKFold(train['QuoteConversion_Flag'], n_folds=5, shuffle=True), 
+clf = GridSearchCV(xgb_model, parameters, n_jobs=5,
+                   cv=StratifiedKFold(train['QuoteConversion_Flag'], n_folds=5, shuffle=True),
                    scoring='roc_auc',
                    verbose=2, refit=True)
 
 clf.fit(train[features], train["QuoteConversion_Flag"])
 
-#trust your CV!
+# trust your CV!
 best_parameters, score, _ = max(clf.grid_scores_, key=lambda x: x[1])
 print('Raw AUC score:', score)
 for param_name in sorted(best_parameters.keys()):
     print("%s: %r" % (param_name, best_parameters[param_name]))
 
-test_probs = clf.predict_proba(test[features])[:,1]
+test_probs = clf.predict_proba(test[features])[:, 1]
 
 sample = pd.read_csv('../input/sample_submission.csv')
 sample.QuoteConversion_Flag = test_probs
